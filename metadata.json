@@ -1,0 +1,7 @@
+{
+  "name": "ThyroTrack: Medical History Timeline",
+  "description": "A comprehensive medical history tracker specialized for thyroid cancer patients, featuring lab result charting, imaging logs, and AI-powered summaries for doctors.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
