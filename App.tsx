@@ -17,45 +17,47 @@ const DEFAULT_PROFILE: PatientProfile = {
 };
 
 const App: React.FC = () => {
-  // Use a simplified state initialization to avoid potential parsing crashes during early load
-  const [records, setRecords] = useState<MedicalRecord[]>(MOCK_RECORDS);
+  const [records, setRecords] = useState<MedicalRecord[]>([]);
   const [profile, setProfile] = useState<PatientProfile>(DEFAULT_PROFILE);
   const [isLoaded, setIsLoaded] = useState(false);
-
   const [activeTab, setActiveTab] = useState<'timeline' | 'labs'>('timeline');
   const [filterMode, setFilterMode] = useState<'all' | 'milestones'>('all');
   
-  // Modal State
+  // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<MedicalRecord | undefined>(undefined);
 
-  // Load from local storage once on mount
+  // Initialize data strictly once
   useEffect(() => {
     try {
-      const savedRecords = localStorage.getItem('thyrotrack_records');
-      if (savedRecords) setRecords(JSON.parse(savedRecords));
+      const savedRecords = localStorage.getItem('thyrotrack_records_v1');
+      const savedProfile = localStorage.getItem('thyrotrack_profile_v1');
       
-      const savedProfile = localStorage.getItem('thyrotrack_profile');
-      if (savedProfile) setProfile(JSON.parse(savedProfile));
+      if (savedRecords) {
+        setRecords(JSON.parse(savedRecords));
+      } else {
+        setRecords(MOCK_RECORDS);
+      }
+
+      if (savedProfile) {
+        setProfile(JSON.parse(savedProfile));
+      }
     } catch (e) {
-      console.warn("Storage load failed", e);
+      console.error("Local storage initialization failed", e);
+      setRecords(MOCK_RECORDS);
+    } finally {
+      setIsLoaded(true);
     }
-    setIsLoaded(true);
   }, []);
 
-  // Save to local storage when state changes
+  // Save updates
   useEffect(() => {
     if (isLoaded) {
-      localStorage.setItem('thyrotrack_records', JSON.stringify(records));
+      localStorage.setItem('thyrotrack_records_v1', JSON.stringify(records));
+      localStorage.setItem('thyrotrack_profile_v1', JSON.stringify(profile));
     }
-  }, [records, isLoaded]);
-
-  useEffect(() => {
-    if (isLoaded) {
-      localStorage.setItem('thyrotrack_profile', JSON.stringify(profile));
-    }
-  }, [profile, isLoaded]);
+  }, [records, profile, isLoaded]);
 
   const handleSaveRecord = (newRecord: MedicalRecord) => {
     setRecords(prev => {
@@ -68,7 +70,7 @@ const App: React.FC = () => {
   };
 
   const handleDeleteRecord = (id: string) => {
-    if (window.confirm("Are you sure you want to delete this record?")) {
+    if (window.confirm("Delete this record permanently?")) {
       setRecords(prev => prev.filter(r => r.id !== id));
     }
   };
@@ -84,134 +86,112 @@ const App: React.FC = () => {
   };
 
   const majorEventsCount = records.filter(r => r.isMajorEvent).length;
-  const latestTg = records
-    .filter(r => r.type === RecordType.BLOOD_TEST)
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
-    ?.results?.find(res => res.marker === 'Thyroglobulin')?.value;
+  
+  // Find latest Tg safely
+  const bloodTests = records.filter(r => r.type === RecordType.BLOOD_TEST);
+  const sortedTests = [...bloodTests].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const latestTg = sortedTests[0]?.results?.find(res => res.marker === 'Thyroglobulin')?.value;
 
   const displayRecords = filterMode === 'milestones' 
     ? records.filter(r => r.isMajorEvent)
     : records;
 
-  if (!isLoaded) return null;
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-slate-500 font-medium">Loading Medical History...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
-      {/* Header */}
+    <div className="min-h-screen bg-slate-50 flex flex-col safe-top safe-bottom">
+      {/* App Bar */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <i className="fas fa-notes-medical text-white"></i>
+            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-200">
+              <i className="fas fa-notes-medical text-white text-sm"></i>
             </div>
             <h1 className="text-xl font-bold text-gray-900 tracking-tight">ThyroTrack</h1>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 md:gap-3">
              <button 
               onClick={handleAddNew}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors md:px-4 md:py-2 md:text-sm"
+              className="bg-blue-600 hover:bg-blue-700 active:scale-95 text-white px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shadow-md shadow-blue-100"
              >
                 <i className="fas fa-plus"></i> <span className="hidden sm:inline">Add Record</span>
              </button>
-             <div className="h-8 w-px bg-gray-200 hidden md:block"></div>
              <button 
                 onClick={() => setIsProfileModalOpen(true)}
-                className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-full border border-slate-200 transition-colors group"
+                className="flex items-center justify-center w-10 h-10 rounded-full bg-slate-100 border border-slate-200 hover:bg-slate-200 transition-colors"
              >
-                <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center overflow-hidden border border-white">
-                   <img src={`https://api.dicebear.com/7.x/initials/svg?seed=${profile.name}`} alt="avatar" />
-                </div>
-                <span className="text-xs font-semibold text-slate-700 group-hover:text-blue-600">{profile.name}</span>
+                <img className="w-7 h-7 rounded-full" src={`https://api.dicebear.com/7.x/initials/svg?seed=${profile.name}`} alt="avatar" />
              </button>
           </div>
         </div>
       </header>
 
-      <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-8">
-        {/* Quick Stats Banner */}
-        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-          <button 
-            onClick={() => {
-              setActiveTab('timeline');
-              setFilterMode('milestones');
-            }}
-            className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-all hover:border-blue-200 text-left group"
+      <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-6">
+        {/* Profile Card / Stats */}
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
+          <div 
+            onClick={() => { setActiveTab('timeline'); setFilterMode('milestones'); }}
+            className={`p-4 rounded-2xl border transition-all cursor-pointer ${filterMode === 'milestones' ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white border-gray-100 text-slate-900 hover:border-blue-200'}`}
           >
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${filterMode === 'milestones' ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-600 group-hover:bg-blue-200'}`}>
-              <i className="fas fa-star text-xl"></i>
-            </div>
-            <div>
-              <div className="text-xs text-gray-500 font-medium">Milestones</div>
-              <div className="text-2xl font-bold text-gray-900">{majorEventsCount} Major Events</div>
-            </div>
-          </button>
-          <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-shadow">
-            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center text-green-600">
-              <i className="fas fa-vial text-xl"></i>
-            </div>
-            <div>
-              <div className="text-xs text-gray-500 font-medium">Latest Tg Marker</div>
-              <div className="text-2xl font-bold text-gray-900">{latestTg ?? 'N/A'} <span className="text-xs font-normal text-gray-400">ng/mL</span></div>
-            </div>
+            <div className="text-[10px] uppercase tracking-widest font-bold opacity-70 mb-1">Milestones</div>
+            <div className="text-2xl font-black">{majorEventsCount}</div>
           </div>
-          <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-shadow md:col-span-2 lg:col-span-1 cursor-pointer group" onClick={() => setIsProfileModalOpen(true)}>
-            <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center text-purple-600 group-hover:bg-purple-200 transition-colors">
-              <i className="fas fa-dna text-xl"></i>
-            </div>
-            <div>
-              <div className="text-xs text-gray-500 font-medium">Diagnosis & Age</div>
-              <div className="text-lg font-bold text-gray-900">{profile.age ? `${profile.age}y • ` : ''}{profile.stage || profile.diagnosis}</div>
-            </div>
+          <div className="p-4 bg-white rounded-2xl border border-gray-100 text-slate-900">
+            <div className="text-[10px] uppercase tracking-widest font-bold text-slate-400 mb-1">Latest Tg</div>
+            <div className="text-2xl font-black text-blue-600">{latestTg ?? '—'}<span className="text-[10px] font-normal text-slate-400 ml-1">ng/mL</span></div>
           </div>
-        </section>
+          <div 
+            onClick={() => setIsProfileModalOpen(true)}
+            className="p-4 bg-white rounded-2xl border border-gray-100 text-slate-900 cursor-pointer hover:border-blue-200 col-span-2 lg:col-span-1"
+          >
+            <div className="text-[10px] uppercase tracking-widest font-bold text-slate-400 mb-1">Diagnosis</div>
+            <div className="text-sm font-bold truncate">{profile.stage || profile.diagnosis}</div>
+          </div>
+        </div>
 
-        {/* Tab Navigation */}
-        <div className="flex bg-white p-1 rounded-xl shadow-sm border border-gray-200 mb-8 w-fit overflow-x-auto max-w-full">
+        {/* Tab Nav */}
+        <div className="flex bg-slate-200/50 p-1 rounded-2xl mb-6 w-full max-w-xs mx-auto md:mx-0">
           <button 
-            onClick={() => {
-              setActiveTab('timeline');
-              setFilterMode('all');
-            }}
-            className={`px-4 sm:px-6 py-2 rounded-lg text-sm font-bold transition-all flex-shrink-0 ${activeTab === 'timeline' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-blue-600'}`}
+            onClick={() => { setActiveTab('timeline'); setFilterMode('all'); }}
+            className={`flex-1 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider tab-transition ${activeTab === 'timeline' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
-            <i className="fas fa-stream mr-2"></i> Timeline
+            Timeline
           </button>
           <button 
              onClick={() => setActiveTab('labs')}
-            className={`px-4 sm:px-6 py-2 rounded-lg text-sm font-bold transition-all flex-shrink-0 ${activeTab === 'labs' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-blue-600'}`}
+            className={`flex-1 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider tab-transition ${activeTab === 'labs' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
-            <i className="fas fa-list-ul mr-2"></i> Lab Comparison
+            Labs
           </button>
         </div>
 
-        {/* Content Area */}
-        <div className="space-y-8">
+        {/* Content */}
+        <div className="space-y-6">
           {activeTab === 'timeline' && (
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8">
+            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-5 md:p-8">
               <div className="flex items-center justify-between mb-8">
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900">
-                    {filterMode === 'milestones' ? 'Major Milestones' : 'Medical Journey'}
-                  </h2>
-                  <p className="text-gray-500">
-                    {filterMode === 'milestones' 
-                      ? 'Displaying only your key medical events and surgeries' 
-                      : 'A chronological record of tests and procedures'}
-                  </p>
-                </div>
+                <h2 className="text-xl font-black text-gray-900">
+                  {filterMode === 'milestones' ? 'Key Milestones' : 'Medical Journey'}
+                </h2>
                 {filterMode === 'milestones' && (
-                  <button 
-                    onClick={() => setFilterMode('all')}
-                    className="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors"
-                  >
-                    Show All Records
+                  <button onClick={() => setFilterMode('all')} className="text-[10px] font-black uppercase tracking-wider text-blue-600 bg-blue-50 px-3 py-2 rounded-lg">
+                    Show All
                   </button>
                 )}
               </div>
               
-              <div className="max-w-3xl mx-auto">
+              <div className="max-w-2xl">
                 {displayRecords.length > 0 ? (
-                  displayRecords.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((record, index) => (
+                  [...displayRecords].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((record, index) => (
                     <TimelineItem 
                       key={record.id} 
                       record={record} 
@@ -221,10 +201,12 @@ const App: React.FC = () => {
                     />
                   ))
                 ) : (
-                  <div className="text-center py-20 bg-slate-50 rounded-3xl border border-dashed border-gray-200">
-                    <i className="fas fa-folder-open text-4xl text-gray-300 mb-4"></i>
-                    <p className="text-gray-500 font-medium">No records found matching your selection.</p>
-                    <button onClick={handleAddNew} className="text-blue-600 font-bold text-sm mt-2 hover:underline">Add your first record</button>
+                  <div className="text-center py-20 bg-slate-50/50 rounded-3xl border border-dashed border-gray-200">
+                    <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
+                      <i className="fas fa-folder-open text-slate-300"></i>
+                    </div>
+                    <p className="text-slate-400 font-medium text-sm">No records found.</p>
+                    <button onClick={handleAddNew} className="text-blue-600 font-bold text-xs mt-3 uppercase tracking-widest">Add your first record</button>
                   </div>
                 )}
               </div>
@@ -232,7 +214,7 @@ const App: React.FC = () => {
           )}
 
           {activeTab === 'labs' && (
-            <div className="space-y-8">
+            <div className="space-y-6">
               <LabCharts records={records} />
               <LabTable 
                 records={records} 
@@ -258,14 +240,12 @@ const App: React.FC = () => {
         initialProfile={profile}
       />
 
-      <footer className="bg-white border-t border-gray-200 py-8 mt-12 print:hidden">
-        <div className="max-w-5xl mx-auto px-4 text-center">
-          <div className="flex items-center justify-center gap-2 mb-4">
-             <i className="fas fa-shield-halved text-blue-600"></i>
-             <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Local-Only Secure Storage</span>
-          </div>
-          <p className="text-sm text-gray-500">&copy; 2025 ThyroTrack Medical History Management. All data stored locally in your browser.</p>
+      <footer className="py-10 text-center opacity-30 select-none">
+        <div className="flex items-center justify-center gap-2 mb-2">
+          <i className="fas fa-lock text-[10px]"></i>
+          <span className="text-[10px] font-black uppercase tracking-[0.2em]">Offline Secured</span>
         </div>
+        <p className="text-[10px] font-medium">Data stored locally on your device.</p>
       </footer>
     </div>
   );
