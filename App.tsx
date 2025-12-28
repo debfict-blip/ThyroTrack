@@ -17,23 +17,10 @@ const DEFAULT_PROFILE: PatientProfile = {
 };
 
 const App: React.FC = () => {
-  const [records, setRecords] = useState<MedicalRecord[]>(() => {
-    try {
-      const saved = localStorage.getItem('thyrotrack_records');
-      return saved ? JSON.parse(saved) : MOCK_RECORDS;
-    } catch (e) {
-      return MOCK_RECORDS;
-    }
-  });
-  
-  const [profile, setProfile] = useState<PatientProfile>(() => {
-    try {
-      const saved = localStorage.getItem('thyrotrack_profile');
-      return saved ? JSON.parse(saved) : DEFAULT_PROFILE;
-    } catch (e) {
-      return DEFAULT_PROFILE;
-    }
-  });
+  // Use a simplified state initialization to avoid potential parsing crashes during early load
+  const [records, setRecords] = useState<MedicalRecord[]>(MOCK_RECORDS);
+  const [profile, setProfile] = useState<PatientProfile>(DEFAULT_PROFILE);
+  const [isLoaded, setIsLoaded] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'timeline' | 'labs'>('timeline');
   const [filterMode, setFilterMode] = useState<'all' | 'milestones'>('all');
@@ -43,14 +30,32 @@ const App: React.FC = () => {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<MedicalRecord | undefined>(undefined);
 
-  // Persistence
+  // Load from local storage once on mount
   useEffect(() => {
-    localStorage.setItem('thyrotrack_records', JSON.stringify(records));
-  }, [records]);
+    try {
+      const savedRecords = localStorage.getItem('thyrotrack_records');
+      if (savedRecords) setRecords(JSON.parse(savedRecords));
+      
+      const savedProfile = localStorage.getItem('thyrotrack_profile');
+      if (savedProfile) setProfile(JSON.parse(savedProfile));
+    } catch (e) {
+      console.warn("Storage load failed", e);
+    }
+    setIsLoaded(true);
+  }, []);
+
+  // Save to local storage when state changes
+  useEffect(() => {
+    if (isLoaded) {
+      localStorage.setItem('thyrotrack_records', JSON.stringify(records));
+    }
+  }, [records, isLoaded]);
 
   useEffect(() => {
-    localStorage.setItem('thyrotrack_profile', JSON.stringify(profile));
-  }, [profile]);
+    if (isLoaded) {
+      localStorage.setItem('thyrotrack_profile', JSON.stringify(profile));
+    }
+  }, [profile, isLoaded]);
 
   const handleSaveRecord = (newRecord: MedicalRecord) => {
     setRecords(prev => {
@@ -87,6 +92,8 @@ const App: React.FC = () => {
   const displayRecords = filterMode === 'milestones' 
     ? records.filter(r => r.isMajorEvent)
     : records;
+
+  if (!isLoaded) return null;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
