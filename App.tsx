@@ -1,12 +1,10 @@
-
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MedicalRecord, RecordType, PatientProfile } from './types';
 import { MOCK_RECORDS } from './constants';
 import TimelineItem from './components/TimelineItem';
 import LabTable from './components/LabTable';
 import MedicalRecordModal from './components/MedicalRecordModal';
 import ProfileModal from './components/ProfileModal';
-import { generateMedicalSummary } from './services/geminiService';
 
 const DEFAULT_PROFILE: PatientProfile = {
   name: "New Patient",
@@ -28,11 +26,8 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : DEFAULT_PROFILE;
   });
 
-  const [activeTab, setActiveTab] = useState<'timeline' | 'labs' | 'summary'>('timeline');
+  const [activeTab, setActiveTab] = useState<'timeline' | 'labs'>('timeline');
   const [filterMode, setFilterMode] = useState<'all' | 'milestones'>('all');
-  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
-  const [summary, setSummary] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -47,20 +42,6 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('thyrotrack_profile', JSON.stringify(profile));
   }, [profile]);
-
-  const handleGenerateSummary = async () => {
-    setIsGeneratingSummary(true);
-    setError(null);
-    try {
-      const result = await generateMedicalSummary(records);
-      setSummary(result);
-      setActiveTab('summary');
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setIsGeneratingSummary(false);
-    }
-  };
 
   const handleSaveRecord = (newRecord: MedicalRecord) => {
     setRecords(prev => {
@@ -86,19 +67,6 @@ const App: React.FC = () => {
   const handleAddNew = () => {
     setEditingRecord(undefined);
     setIsModalOpen(true);
-  };
-
-  const handleShare = () => {
-    const shareText = `Medical Summary for ${profile.name}\n\n${summary || "Please generate an AI summary first."}`;
-    if (navigator.share) {
-      navigator.share({
-        title: 'My Medical History',
-        text: shareText,
-      }).catch(console.error);
-    } else {
-      navigator.clipboard.writeText(shareText);
-      alert("Summary copied to clipboard!");
-    }
   };
 
   const majorEventsCount = records.filter(r => r.isMajorEvent).length;
@@ -198,12 +166,6 @@ const App: React.FC = () => {
           >
             <i className="fas fa-list-ul mr-2"></i> Lab Comparison
           </button>
-          <button 
-             onClick={() => setActiveTab('summary')}
-            className={`px-4 sm:px-6 py-2 rounded-lg text-sm font-bold transition-all flex-shrink-0 ${activeTab === 'summary' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-blue-600'}`}
-          >
-            <i className="fas fa-file-alt mr-2"></i> AI Summary
-          </button>
         </div>
 
         {/* Content Area */}
@@ -260,79 +222,6 @@ const App: React.FC = () => {
               onDeleteRecord={handleDeleteRecord}
             />
           )}
-
-          {activeTab === 'summary' && (
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-10">
-              <div className="flex flex-col items-center justify-center text-center max-w-2xl mx-auto">
-                <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center text-blue-600 mb-4">
-                  <i className="fas fa-robot text-3xl"></i>
-                </div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">AI-Generated Doctor's Brief</h2>
-                <p className="text-gray-500 mb-8">
-                  Using your full medical history, our AI creates a concise summary that your new doctor can read in under 2 minutes.
-                </p>
-
-                {error && (
-                  <div className="w-full bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl mb-6 text-left flex items-start gap-3">
-                    <i className="fas fa-exclamation-circle mt-1"></i>
-                    <div>
-                      <p className="font-bold">Error generating summary</p>
-                      <p className="text-sm">{error}</p>
-                    </div>
-                  </div>
-                )}
-
-                {summary ? (
-                  <div className="w-full text-left bg-slate-50 border border-slate-200 rounded-2xl p-6 prose prose-slate max-w-none">
-                    <div className="flex items-center justify-between mb-6">
-                       <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">Analysis Ready</span>
-                       <button 
-                        onClick={() => setSummary(null)}
-                        className="text-xs text-gray-400 hover:text-blue-600"
-                       >
-                         <i className="fas fa-redo mr-1"></i> Regenerate
-                       </button>
-                    </div>
-                    <div className="whitespace-pre-wrap leading-relaxed text-gray-700 mb-8">
-                      {summary}
-                    </div>
-                    <div className="pt-6 border-t border-slate-200 flex flex-col sm:flex-row gap-4">
-                       <button 
-                        onClick={() => window.print()}
-                        className="flex-1 bg-white border border-slate-300 py-3 rounded-xl font-bold text-gray-700 hover:bg-slate-50 transition-colors"
-                       >
-                         <i className="fas fa-print mr-2"></i> Print for Doctor
-                       </button>
-                       <button 
-                        onClick={handleShare}
-                        className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200"
-                       >
-                         <i className="fas fa-share-alt mr-2"></i> Share Securely
-                       </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button 
-                    disabled={isGeneratingSummary}
-                    onClick={handleGenerateSummary}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-2xl font-bold flex items-center gap-3 transition-all transform hover:scale-105 disabled:opacity-50 disabled:scale-100 shadow-xl shadow-blue-200"
-                  >
-                    {isGeneratingSummary ? (
-                      <>
-                        <i className="fas fa-circle-notch fa-spin"></i>
-                        Analyzing Medical History...
-                      </>
-                    ) : (
-                      <>
-                        <i className="fas fa-wand-magic-sparkles"></i>
-                        Generate Summary for Oncologist
-                      </>
-                    )}
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
         </div>
       </main>
 
@@ -354,9 +243,9 @@ const App: React.FC = () => {
         <div className="max-w-5xl mx-auto px-4 text-center">
           <div className="flex items-center justify-center gap-2 mb-4">
              <i className="fas fa-shield-halved text-blue-600"></i>
-             <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">End-to-End Encrypted Medical Data</span>
+             <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Local-Only Secure Storage</span>
           </div>
-          <p className="text-sm text-gray-500">&copy; 2025 ThyroTrack Medical History Management. All data stored locally.</p>
+          <p className="text-sm text-gray-500">&copy; 2025 ThyroTrack Medical History Management. All data stored locally in your browser.</p>
         </div>
       </footer>
     </div>

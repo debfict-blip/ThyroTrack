@@ -3,7 +3,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { MedicalRecord } from "../types";
 
 export const generateMedicalSummary = async (records: MedicalRecord[]) => {
-  // Fix: Initializing GoogleGenAI using a named parameter with process.env.API_KEY directly as per guidelines
+  // Creating a new instance right before the call to ensure it uses the most up-to-date API key
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   const recordsJson = JSON.stringify(records, null, 2);
@@ -29,16 +29,14 @@ export const generateMedicalSummary = async (records: MedicalRecord[]) => {
       model: 'gemini-3-pro-preview',
       contents: prompt,
     });
-    // Fix: Accessing .text as a property, not a method, per guidelines
     return response.text;
   } catch (error) {
     console.error("Gemini API Error:", error);
-    throw new Error("Failed to generate summary. Please try again later.");
+    throw error;
   }
 };
 
 export const parseLabReport = async (text: string) => {
-  // Fix: Initializing GoogleGenAI using a named parameter with process.env.API_KEY directly as per guidelines
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   const prompt = `
@@ -54,7 +52,6 @@ export const parseLabReport = async (text: string) => {
       contents: prompt,
       config: {
         responseMimeType: "application/json",
-        // Fix: Added responseSchema to improve JSON output reliability as per guidelines
         responseSchema: {
           type: Type.ARRAY,
           items: {
@@ -78,7 +75,6 @@ export const parseLabReport = async (text: string) => {
         },
       }
     });
-    // Fix: Accessing .text as a property per guidelines
     return JSON.parse(response.text || '[]');
   } catch (error) {
     console.error("Error parsing lab report:", error);
