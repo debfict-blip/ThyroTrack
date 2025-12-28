@@ -1,6 +1,5 @@
-
 import React, { useMemo, useState } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { MedicalRecord, RecordType } from '../types';
 
 interface Props {
@@ -14,7 +13,6 @@ const LabCharts: React.FC<Props> = ({ records }) => {
     return records
       .filter(r => r.type === RecordType.BLOOD_TEST && r.results?.some(res => res.marker === selectedMarker))
       .map(r => ({
-        // Fix: '2y' is not a valid value for Intl.DateTimeFormatOptions.year; changed to '2-digit'
         date: new Date(r.date).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
         rawDate: new Date(r.date).getTime(),
         value: r.results?.find(res => res.marker === selectedMarker)?.value
@@ -24,8 +22,12 @@ const LabCharts: React.FC<Props> = ({ records }) => {
 
   const markers = useMemo(() => {
     const set = new Set<string>();
-    records.forEach(r => r.results?.forEach(res => set.add(res.marker)));
-    return Array.from(set);
+    records.forEach(r => {
+      if (r.type === RecordType.BLOOD_TEST) {
+        r.results?.forEach(res => set.add(res.marker));
+      }
+    });
+    return Array.from(set).sort();
   }, [records]);
 
   return (
@@ -52,7 +54,7 @@ const LabCharts: React.FC<Props> = ({ records }) => {
         </div>
       </div>
 
-      <div className="h-[350px] w-full">
+      <div className="h-[300px] w-full">
         {chartData.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
@@ -70,24 +72,25 @@ const LabCharts: React.FC<Props> = ({ records }) => {
               />
               <Tooltip 
                 contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
-                itemStyle={{ fontWeight: 'bold' }}
+                itemStyle={{ fontWeight: 'bold', fontSize: '12px' }}
+                labelStyle={{ color: '#64748b', marginBottom: '4px', fontWeight: 'bold' }}
               />
               <Line 
                 type="monotone" 
                 dataKey="value" 
                 stroke="#2563eb" 
                 strokeWidth={3} 
-                dot={{ r: 6, fill: '#2563eb', strokeWidth: 2, stroke: '#fff' }}
-                activeDot={{ r: 8, strokeWidth: 0 }}
-                animationDuration={1500}
+                dot={{ r: 5, fill: '#2563eb', strokeWidth: 2, stroke: '#fff' }}
+                activeDot={{ r: 7, strokeWidth: 0 }}
+                animationDuration={1000}
                 name={selectedMarker}
               />
             </LineChart>
           </ResponsiveContainer>
         ) : (
-          <div className="h-full flex flex-col items-center justify-center text-gray-400">
-            <i className="fas fa-chart-line text-4xl mb-2"></i>
-            <p>No enough data points for {selectedMarker}</p>
+          <div className="h-full flex flex-col items-center justify-center text-gray-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+            <i className="fas fa-chart-line text-4xl mb-2 opacity-20"></i>
+            <p className="text-sm">Need at least one record with "{selectedMarker}"</p>
           </div>
         )}
       </div>

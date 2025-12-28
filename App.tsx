@@ -3,6 +3,7 @@ import { MedicalRecord, RecordType, PatientProfile } from './types';
 import { MOCK_RECORDS } from './constants';
 import TimelineItem from './components/TimelineItem';
 import LabTable from './components/LabTable';
+import LabCharts from './components/LabCharts';
 import MedicalRecordModal from './components/MedicalRecordModal';
 import ProfileModal from './components/ProfileModal';
 
@@ -17,13 +18,21 @@ const DEFAULT_PROFILE: PatientProfile = {
 
 const App: React.FC = () => {
   const [records, setRecords] = useState<MedicalRecord[]>(() => {
-    const saved = localStorage.getItem('thyrotrack_records');
-    return saved ? JSON.parse(saved) : MOCK_RECORDS;
+    try {
+      const saved = localStorage.getItem('thyrotrack_records');
+      return saved ? JSON.parse(saved) : MOCK_RECORDS;
+    } catch (e) {
+      return MOCK_RECORDS;
+    }
   });
   
   const [profile, setProfile] = useState<PatientProfile>(() => {
-    const saved = localStorage.getItem('thyrotrack_profile');
-    return saved ? JSON.parse(saved) : DEFAULT_PROFILE;
+    try {
+      const saved = localStorage.getItem('thyrotrack_profile');
+      return saved ? JSON.parse(saved) : DEFAULT_PROFILE;
+    } catch (e) {
+      return DEFAULT_PROFILE;
+    }
   });
 
   const [activeTab, setActiveTab] = useState<'timeline' | 'labs'>('timeline');
@@ -216,11 +225,14 @@ const App: React.FC = () => {
           )}
 
           {activeTab === 'labs' && (
-            <LabTable 
-              records={records} 
-              onEditRecord={handleEditRecord}
-              onDeleteRecord={handleDeleteRecord}
-            />
+            <div className="space-y-8">
+              <LabCharts records={records} />
+              <LabTable 
+                records={records} 
+                onEditRecord={handleEditRecord}
+                onDeleteRecord={handleDeleteRecord}
+              />
+            </div>
           )}
         </div>
       </main>
